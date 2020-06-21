@@ -4,6 +4,7 @@
 #include <iostream>
 #include <initializer_list>
 #include <cstddef>
+#include <stdexcept>
 
 using namespace std;
 
@@ -33,6 +34,7 @@ class Vector {
 
 	public:
 
+		// Konstruktor mit max_sz und Defaultkonstruktor
 		Vector (size_type n = min_sz) {
 			if (n < min_sz)
 				max_sz = min_sz;
@@ -43,10 +45,15 @@ class Vector {
 			values = new value_type [max_sz];
 		} 
 
+		//Konstruktor mit Initializer list
 		Vector (initializer_list<value_type> il) {
-			max_sz = il.size();
+			if (il.size() < min_sz)
+				max_sz = min_sz;
+			else 	
+				max_sz = il.size();
+			
 			values = new value_type [max_sz];
-			sz = max_sz;
+			sz = il.size();
 
 			size_type a {0};
 
@@ -56,20 +63,24 @@ class Vector {
 			}
 		}
 
-		Vector (Vector& v) {
+		// Kopierkonstruktor
+		Vector (const Vector& v) {
 			sz = v.sz;
 			max_sz = v.max_sz;
 			
 			values = new value_type [max_sz];
-			values = v.values;
+			for (size_type a {0}; a < v.sz; a++) {
+				values[a] = v.values[a];
+			}
 		}
 
+		//Destruktor
 		~Vector () {
 			delete [] values;
 		}
 
 		iterator begin () {
-			return iterator {values};
+			return values;
 		}
 
 		const_iterator begin () const {
@@ -87,16 +98,18 @@ class Vector {
 		iterator insert (const_iterator pos, const_reference val) {
 			auto diff = pos-begin();
 
-			if (diff < 0 || static_cast<size_type>(diff) > sz)
-				throw runtime_error ("Iterator out of bounds");
-
 			size_type current {static_cast<size_type>(diff)};
+			
+			if (diff < 0 || current > sz)
+				throw runtime_error ("Iterator out of bounds");		
 
 			if (sz >= max_sz)
 				reserve (max_sz*2+1);
 
 			for (size_type i {sz}; i-- > current;)
-				values[current] = val;
+				values[i+1] = values[i];
+			
+			values[current] = val;
 
 			++sz;
 
@@ -118,11 +131,7 @@ class Vector {
 					
 			return iterator {values + current};
 		}
-
-		value_type at (size_type a) const {
-			return values[a];
-		}
-
+	
 		size_type size () const {
 			return sz;
 		}
@@ -135,13 +144,20 @@ class Vector {
 		}
 
 		void clear () {
-			delete [] values;
 			sz = 0;
 		}
 
 		void reserve (size_type n) {
-			if (n > max_sz)
+			if (n > max_sz) {
 				max_sz = n;
+				value_type* temp = new value_type[max_sz];
+
+				for (size_t a {0}; a < sz; a++)
+					temp[a] = values[a];
+
+				delete [] values;
+				values = temp;	
+			}	
 		} 
 
 		void shrink_to_fit () {
@@ -150,7 +166,11 @@ class Vector {
 		}
 
 		void push_back (value_type x) {
-			values [++sz] = x;
+			if (sz >= max_sz) 
+				reserve (max_sz*2+1);
+
+			values [sz] = x;
+			++sz;
 		}
 
 		void pop_back () {
@@ -160,18 +180,30 @@ class Vector {
 			sz--;
 		}
 
+		// Kopierzuweisungsoperator
 		void operator= (const Vector& b) {
+			if (b.size() > size())
+				reserve (b.max_sz);
+
 			sz = b.sz;
 			max_sz = b.max_sz;
-			values = b.values;
+			for (size_type a {0}; a < b.sz; a++) {
+				values[a] = b.values[a];
+			}
 		}
 
 		value_type& operator[] (size_type index) {
-			return values[index];
+			if (index < sz && index >= 0)
+				return values[index];
+			else 	
+				throw runtime_error("Invalid index");
 		}
 
 		const value_type& operator[] (size_type index) const {
-			return values[index];
+			if (index < sz && index >= 0)
+				return values[index];
+			else 	
+				throw runtime_error("Invalid index");
 		}
 
 		size_type capacity () const {
@@ -183,7 +215,7 @@ class Vector {
 
         	bool first {true};
 
-	        for (int a {0}; a < sz; a++) {
+	        for (size_t a {0}; a < sz; a++) {
 		        if (first) {
 			        o << values[a];
 			        first = false;
@@ -214,9 +246,8 @@ class Vector {
 
 		public:
 
+			// Iterator-Konstruktor
 			Iterator (pointer p = nullptr) : ptr {p} {}
-
-			pointer get_ptr () const {return ptr;};
 			
 			reference operator* () {
 				return *ptr;
@@ -253,10 +284,6 @@ class Vector {
 
 	class ConstIterator {
 	    
-	    Vector::difference_type operator-(const ConstIterator& other) const { 
-            return ptr-other.ptr;
-        }
-	    
 		public:
 
 			using value_type = Vector::value_type;
@@ -273,7 +300,9 @@ class Vector {
 					
 			ConstIterator (pointer p = nullptr) : ptr {p} {}
 
-			pointer get_ptr () const {return ptr;};
+			Vector::difference_type operator-(const ConstIterator& other) const { 
+            	return ptr-other.ptr;
+        	}
 
 			bool operator== (const const_iterator& other) const {
 				return ptr == other.ptr;
@@ -291,8 +320,9 @@ class Vector {
 				return ptr;
 			}
 
-			const_iterator& operator++ () {
-				return ++(*this);
+			const_iterator& operator++ ()  {
+				++ptr;
+				return *this;
 			}
 
 			const_iterator operator++ (int) {
